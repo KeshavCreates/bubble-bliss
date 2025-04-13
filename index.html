@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bubble Relief - Stress Relief Game</title>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.19.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.19.1/firebase-database-compat.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        background: linear-gradient(45deg, #1a1a1a, #2c3e50);
+        min-height: 100vh;
+        overflow: hidden;
+        font-family: "Arial", sans-serif;
+      }
+
+      .container {
+        position: relative;
+        min-height: 100vh;
+      }
+
+      .header {
+        text-align: center;
+        padding: 2rem;
+        color: #fff;
+      }
+
+      .game-area {
+        position: relative;
+        height: 70vh;
+        margin: 2rem;
+        border-radius: 15px;
+        overflow: hidden;
+      }
+
+      .bubble {
+        position: absolute;
+        border-radius: 50%;
+        background: radial-gradient(circle at 30% 30%, #fff, #89cff0);
+        cursor: pointer;
+        transition: transform 0.2s ease;
+        animation: float 4s infinite ease-in-out;
+      }
+
+      .bubble:hover {
+        transform: scale(1.1);
+      }
+
+      .controls {
+        position: fixed;
+        bottom: 2rem;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 1rem;
+      }
+
+      button {
+        padding: 1rem 2rem;
+        border: none;
+        border-radius: 25px;
+        background: #89cff0;
+        color: #1a1a1a;
+        font-weight: bold;
+        cursor: pointer;
+        transition: transform 0.2s ease;
+      }
+
+      button:hover {
+        transform: scale(1.05);
+        background: #6cb4d2;
+      }
+
+      .audio-toggle {
+        position: fixed;
+        top: 2rem;
+        right: 2rem;
+      }
+
+      @keyframes float {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-20px);
+        }
+      }
+
+      .pop-animation {
+        animation: pop 0.3s ease-out;
+      }
+
+      @keyframes pop {
+        0% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.2);
+        }
+        100% {
+          transform: scale(0);
+          opacity: 0;
+        }
+      }
+
+      .counter {
+        position: fixed;
+        top: 1.5rem;
+        left: 2rem;
+        color: #89cff0;
+        font-size: 1.4rem;
+        background: rgba(26, 26, 26, 0.9);
+        padding: 0.8rem 1.5rem;
+        border-radius: 30px;
+        border: 2px solid #89cff0;
+        box-shadow: 0 0 15px rgba(137, 207, 240, 0.3);
+        font-family: "Arial", sans-serif;
+        font-weight: bold;
+        backdrop-filter: blur(3px);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        z-index: 1000;
+        transition: transform 0.2s ease;
+      }
+
+      .counter::before {
+        content: "🫧";
+        filter: brightness(1.2);
+        animation: float 2s infinite ease-in-out;
+      }
+
+      /* Leaderboard styles */
+      .leaderboard {
+        position: fixed;
+        right: 2rem;
+        top: 6rem;
+        width: 250px;
+        background: rgba(26, 26, 26, 0.9);
+        border-radius: 15px;
+        border: 2px solid #89cff0;
+        color: white;
+        padding: 1rem;
+        box-shadow: 0 0 15px rgba(137, 207, 240, 0.3);
+        backdrop-filter: blur(3px);
+        z-index: 100;
+        max-height: 50vh;
+        overflow-y: auto;
+        transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+      }
+
+      .leaderboard h3 {
+        color: #89cff0;
+        text-align: center;
+        margin-bottom: 1rem;
+        font-size: 1.2rem;
+        border-bottom: 1px solid #89cff0;
+        padding-bottom: 0.5rem;
+      }
+
+      .leaderboard-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid rgba(137, 207, 240, 0.2);
+      }
+
+      .leaderboard-item span:first-child {
+        font-weight: bold;
+      }
+
+      .name-form {
+        text-align: center;
+        margin-top: 1rem;
+      }
+
+      .name-form input {
+        padding: 0.5rem;
+        border-radius: 15px;
+        border: 1px solid #89cff0;
+        background: rgba(26, 26, 26, 0.7);
+        color: white;
+        margin-right: 0.5rem;
+      }
+
+      .name-form button {
+        padding: 0.5rem;
+        font-size: 0.8rem;
+      }
+
+      .loader {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid rgba(137, 207, 240, 0.3);
+        border-radius: 50%;
+        border-top-color: #89cff0;
+        animation: spin 1s ease-in-out infinite;
+        margin-left: 10px;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      /* Mobile-specific styles */
+      .leaderboard-toggle {
+        display: none;
+        position: fixed;
+        top: 1.5rem;
+        right: 1.5rem;
+        width: 3.5rem;
+        height: 3.5rem;
+        border-radius: 50%;
+        background: rgba(26, 26, 26, 0.9);
+        border: 2px solid #89cff0;
+        color: #89cff0;
+        font-size: 1.5rem;
+        justify-content: center;
+        align-items: center;
+        z-index: 1001;
+        cursor: pointer;
+        transition: transform 0.2s ease;
+        box-shadow: 0 0 15px rgba(137, 207, 240, 0.3);
+      }
+
+      .leaderboard-toggle:hover {
+        transform: scale(1.05);
+      }
+
+      .mobile-audio-toggle {
+        position: fixed;
+        top: 1.5rem;
+        right: 5.5rem;
+        display: none;
+        width: 3.5rem;
+        height: 3.5rem;
+        border-radius: 50%;
+        font-size: 1.5rem;
+        padding: 0;
+        justify-content: center;
+        align-items: center;
+      }
+
+      /* Mobile styles */
+      @media (max-width: 768px) {
+        .header h1 {
+          font-size: 1.5rem;
+          margin-top: 1rem;
+        }
+
+        .header {
+          padding: 1rem;
+        }
+
+        .counter {
+          top: 1.5rem;
+          left: 1.5rem;
+          font-size: 1.1rem;
+          padding: 0.6rem 1rem;
+        }
+
+        .game-area {
+          margin: 1rem;
+          height: 65vh;
+        }
+
+        .leaderboard {
+          position: fixed;
+          top: 0;
+          right: 0;
+          width: 100%;
+          max-width: 300px;
+          height: 100vh;
+          max-height: 100vh;
+          border-radius: 0;
+          border-left: 2px solid #89cff0;
+          border-right: 0;
+          border-top: 0;
+          border-bottom: 0;
+          transform: translateX(100%);
+          opacity: 0;
+          z-index: 2000;
+        }
+
+        .leaderboard.visible {
+          transform: translateX(0);
+          opacity: 1;
+        }
+
+        .leaderboard-toggle {
+          display: flex;
+        }
+
+        .mobile-audio-toggle {
+          display: flex;
+        }
+
+        .audio-toggle {
+          display: none;
+        }
+
+        button {
+          padding: 0.8rem 1.5rem;
+          font-size: 0.9rem;
+        }
+
+        .controls {
+          bottom: 1.5rem;
+        }
+
+        .name-form {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+          align-items: center;
+        }
+
+        .name-form input {
+          width: 80%;
+          margin-right: 0;
+          padding: 0.8rem;
+        }
+
+        .name-form button {
+          width: 80%;
+          padding: 0.8rem;
+        }
+
+        .leaderboard-close {
+          position: absolute;
+          top: 1rem;
+          left: 1rem;
+          width: 2.5rem;
+          height: 2.5rem;
+          border-radius: 50%;
+          background: rgba(26, 26, 26, 0.9);
+          border: 2px solid #89cff0;
+          color: #89cff0;
+          font-size: 1.2rem;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          cursor: pointer;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="counter" id="counter">Popped: 0</div>
+
+      <div class="header">
+        <h1>🫧 Bubble Bliss 🫧</h1>
+        <p>Click bubbles to pop!</p>
+      </div>
+      <div class="game-area" id="gameArea"></div>
+      <button class="audio-toggle" onclick="toggleAudio()">🔊 Sound On</button>
+      <button class="mobile-audio-toggle" onclick="toggleAudio()">🔊</button>
+      <div class="leaderboard-toggle" id="leaderboardToggle">🏆</div>
+
+      <div class="leaderboard" id="leaderboard">
+        <div class="leaderboard-close" id="leaderboardClose">✖</div>
+        <h3>🏆 Global Leaderboard 🏆</h3>
+        <div id="leaderboardList">
+          <div class="leaderboard-item">
+            <span>Loading scores...</span>
+            <span class="loader"></span>
+          </div>
+        </div>
+        <div class="name-form">
+          <input
+            type="text"
+            id="playerName"
+            placeholder="Your name"
+            maxlength="15"
+          />
+          <button onclick="saveScore()" id="saveScoreBtn">Save Score</button>
+          <span class="loader hidden" id="saveLoader"></span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button onclick="createBubbles(10)">More Bubbles</button>
+        <button onclick="resetGame()">Reset</button>
+      </div>
+    </div>
+
+    <script>
+      // Initialize Firebase with your config
+      // IMPORTANT: Replace with your own Firebase config
+      const firebaseConfig = {
+        apiKey: "AIzaSyAoG6K0C2ngtHL58k4QTMiCsggpd-9A2uQ",
+        authDomain: "bubble-bliss-2d92e.firebaseapp.com",
+        databaseURL: "https://bubble-bliss-2d92e-default-rtdb.firebaseio.com",
+        projectId: "bubble-bliss-2d92e",
+        storageBucket: "bubble-bliss-2d92e.firebasestorage.app",
+        messagingSenderId: "1098736825449",
+        appId: "1:1098736825449:web:0f89c8e7cd2b9907e71ef8",
+        measurementId: "G-6TW2CZZFMJ",
+      };
+
+      // Initialize Firebase
+      firebase.initializeApp(firebaseConfig);
+      const database = firebase.database();
+      const leaderboardRef = database.ref("leaderboard");
+
+      const popSound = new Audio(
+        "https://cdnjs.cloudflare.com/ajax/libs/ion-sound/3.0.7/sounds/button_tiny.mp3"
+      );
+      let audioEnabled = true;
+      let bubbles = [];
+
+      // Generate a unique ID for this player session
+      const sessionId =
+        Date.now().toString(36) + Math.random().toString(36).substr(2);
+
+      // Initialize popped count from localStorage or set to 0
+      let poppedCount = parseInt(
+        localStorage.getItem("bubbleBlissPoppedCount") || 0
+      );
+      const counterElement = document.getElementById("counter");
+      const leaderboardElement = document.getElementById("leaderboardList");
+      const saveButton = document.getElementById("saveScoreBtn");
+      const saveLoader = document.getElementById("saveLoader");
+      const leaderboardToggle = document.getElementById("leaderboardToggle");
+      const leaderboardClose = document.getElementById("leaderboardClose");
+      const leaderboard = document.getElementById("leaderboard");
+
+      // Mobile leaderboard toggle functionality
+      leaderboardToggle.addEventListener("click", () => {
+        leaderboard.classList.add("visible");
+      });
+
+      leaderboardClose.addEventListener("click", () => {
+        leaderboard.classList.remove("visible");
+      });
+
+      function updateCounter() {
+        counterElement.textContent = `Popped: ${poppedCount}`;
+        // Save to localStorage
+        localStorage.setItem("bubbleBlissPoppedCount", poppedCount);
+      }
+
+      function updateLeaderboard() {
+        leaderboardRef
+          .orderByChild("score")
+          .limitToLast(10)
+          .once("value", (snapshot) => {
+            // Clear current leaderboard
+            leaderboardElement.innerHTML = "";
+
+            const data = snapshot.val() || {};
+            const scores = [];
+
+            // Convert to array and sort
+            for (let key in data) {
+              scores.push({
+                id: key,
+                name: data[key].name,
+                score: data[key].score,
+              });
+            }
+
+            scores.sort((a, b) => b.score - a.score);
+
+            if (scores.length === 0) {
+              const item = document.createElement("div");
+              item.className = "leaderboard-item";
+              item.innerHTML = `<span>No scores yet!</span>`;
+              leaderboardElement.appendChild(item);
+              return;
+            }
+
+            // Add each entry to the leaderboard
+            scores.forEach((entry, index) => {
+              const item = document.createElement("div");
+              item.className = "leaderboard-item";
+              item.innerHTML = `<span>${index + 1}. ${entry.name}</span><span>${
+                entry.score
+              }</span>`;
+              leaderboardElement.appendChild(item);
+            });
+          });
+      }
+
+      function saveScore() {
+        const nameInput = document.getElementById("playerName");
+        const playerName = nameInput.value.trim() || "Anonymous";
+
+        if (playerName.length < 2) {
+          alert("Please enter a name with at least 2 characters");
+          return;
+        }
+
+        // Show loading state
+        saveButton.disabled = true;
+        saveLoader.classList.remove("hidden");
+
+        // Check if this player has a higher score than their previous submission
+        leaderboardRef
+          .orderByChild("name")
+          .equalTo(playerName)
+          .once("value", (snapshot) => {
+            const data = snapshot.val() || {};
+            const entries = Object.entries(data);
+
+            if (entries.length > 0) {
+              // Player exists, check if new score is higher
+              const [key, entry] = entries[0];
+              if (poppedCount > entry.score) {
+                // Update the score
+                leaderboardRef
+                  .child(key)
+                  .update({
+                    score: poppedCount,
+                    timestamp: firebase.database.ServerValue.TIMESTAMP,
+                  })
+                  .then(() => {
+                    updateLeaderboard();
+                    saveButton.disabled = false;
+                    saveLoader.classList.add("hidden");
+                  });
+              } else {
+                alert(
+                  "Your current score isn't higher than your previous submission!"
+                );
+                saveButton.disabled = false;
+                saveLoader.classList.add("hidden");
+              }
+            } else {
+              // New player, add to leaderboard
+              leaderboardRef
+                .push({
+                  name: playerName,
+                  score: poppedCount,
+                  timestamp: firebase.database.ServerValue.TIMESTAMP,
+                })
+                .then(() => {
+                  updateLeaderboard();
+                  saveButton.disabled = false;
+                  saveLoader.classList.add("hidden");
+                });
+            }
+          });
+      }
+
+      function createBubble() {
+        const bubble = document.createElement("div");
+        bubble.className = "bubble";
+        const size = Math.random() * 60 + 30;
+        const gameArea = document.getElementById("gameArea");
+        const gameAreaWidth = gameArea.offsetWidth;
+        const gameAreaHeight = gameArea.offsetHeight;
+        const x = Math.random() * (gameAreaWidth - size);
+        const y = Math.random() * (gameAreaHeight - size);
+
+        bubble.style.width = `${size}px`;
+        bubble.style.height = `${size}px`;
+        bubble.style.left = `${x}px`;
+        bubble.style.top = `${y}px`;
+
+        bubble.addEventListener("click", () => {
+          if (audioEnabled) {
+            popSound.currentTime = 0;
+            popSound.play();
+          }
+          bubble.classList.add("pop-animation");
+          poppedCount++;
+          updateCounter();
+          setTimeout(() => bubble.remove(), 300);
+        });
+        gameArea.appendChild(bubble);
+        bubbles.push(bubble);
+      }
+
+      function createBubbles(num) {
+        for (let i = 0; i < num; i++) {
+          setTimeout(createBubble, i * 100);
+        }
+      }
+
+      function resetGame() {
+        bubbles.forEach((bubble) => bubble.remove());
+        bubbles = [];
+        createBubbles(15);
+        // Note: We don't reset poppedCount anymore since we want to persist it
+      }
+
+      function toggleAudio() {
+        audioEnabled = !audioEnabled;
+        document.querySelector(".audio-toggle").textContent = audioEnabled
+          ? "🔊 Sound On"
+          : "🔇 Sound Off";
+        document.querySelector(".mobile-audio-toggle").textContent =
+          audioEnabled ? "🔊" : "🔇";
+      }
+
+      // Listen for real-time leaderboard updates
+      leaderboardRef.on("child_added", updateLeaderboard);
+      leaderboardRef.on("child_changed", updateLeaderboard);
+      leaderboardRef.on("child_removed", updateLeaderboard);
+
+      // Initialize the counter display
+      updateCounter();
+
+      // Initialize the leaderboard display
+      updateLeaderboard();
+
+      // Initial bubbles
+      createBubbles(15);
+
+      // Auto-add bubbles every 8 seconds
+      setInterval(() => createBubbles(8), 8000);
+
+      // Make responsive
+      window.addEventListener("resize", () => {
+        const gameArea = document.getElementById("gameArea");
+        const gameAreaWidth = gameArea.offsetWidth;
+        const gameAreaHeight = gameArea.offsetHeight;
+
+        bubbles.forEach((bubble) => {
+          const newX = Math.random() * (gameAreaWidth - bubble.offsetWidth);
+          const newY = Math.random() * (gameAreaHeight - bubble.offsetHeight);
+          bubble.style.left = `${newX}px`;
+          bubble.style.top = `${newY}px`;
+        });
+      });
+    </script>
+  </body>
+</html>
