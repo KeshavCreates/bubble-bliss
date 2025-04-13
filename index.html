@@ -270,7 +270,8 @@
         .counter {
           top: 1.5rem;
           left: 1.5rem;
-          font-size: 1.1rem;
+          margin-top: 60px;
+          font-size: 0.8rem;
           padding: 0.6rem 1rem;
         }
 
@@ -370,7 +371,6 @@
       </div>
       <div class="game-area" id="gameArea"></div>
       <button class="audio-toggle" onclick="toggleAudio()">🔊 Sound On</button>
-      <button class="mobile-audio-toggle" onclick="toggleAudio()">🔊</button>
       <div class="leaderboard-toggle" id="leaderboardToggle">🏆</div>
 
       <div class="leaderboard" id="leaderboard">
@@ -401,8 +401,7 @@
     </div>
 
     <script>
-      // Initialize Firebase with your config
-      // IMPORTANT: Replace with your own Firebase config
+      // Firebase configuration (keep your existing config)
       const firebaseConfig = {
         apiKey: "AIzaSyAoG6K0C2ngtHL58k4QTMiCsggpd-9A2uQ",
         authDomain: "bubble-bliss-2d92e.firebaseapp.com",
@@ -419,15 +418,18 @@
       const database = firebase.database();
       const leaderboardRef = database.ref("leaderboard");
 
+      // Generate or retrieve persistent user ID
+      let userId = localStorage.getItem("bubbleBlissUserId");
+      if (!userId) {
+        userId = Date.now().toString(36) + Math.random().toString(36).substr(2);
+        localStorage.setItem("bubbleBlissUserId", userId);
+      }
+
       const popSound = new Audio(
         "https://cdnjs.cloudflare.com/ajax/libs/ion-sound/3.0.7/sounds/button_tiny.mp3"
       );
       let audioEnabled = true;
       let bubbles = [];
-
-      // Generate a unique ID for this player session
-      const sessionId =
-        Date.now().toString(36) + Math.random().toString(36).substr(2);
 
       // Initialize popped count from localStorage or set to 0
       let poppedCount = parseInt(
@@ -452,31 +454,27 @@
 
       function updateCounter() {
         counterElement.textContent = `Popped: ${poppedCount}`;
-        // Save to localStorage
         localStorage.setItem("bubbleBlissPoppedCount", poppedCount);
       }
 
       function updateLeaderboard() {
         leaderboardRef
           .orderByChild("score")
-          .limitToLast(10)
           .once("value", (snapshot) => {
-            // Clear current leaderboard
             leaderboardElement.innerHTML = "";
-
             const data = snapshot.val() || {};
-            const scores = [];
+            const userMap = new Map();
 
-            // Convert to array and sort
-            for (let key in data) {
-              scores.push({
-                id: key,
-                name: data[key].name,
-                score: data[key].score,
-              });
-            }
+            // Keep only the highest score per user
+            Object.values(data).forEach(entry => {
+              if (!userMap.has(entry.userId) || entry.score > userMap.get(entry.userId).score) {
+                userMap.set(entry.userId, entry);
+              }
+            });
 
+            const scores = Array.from(userMap.values());
             scores.sort((a, b) => b.score - a.score);
+            scores.splice(10); // Keep top 10
 
             if (scores.length === 0) {
               const item = document.createElement("div");
@@ -486,13 +484,10 @@
               return;
             }
 
-            // Add each entry to the leaderboard
             scores.forEach((entry, index) => {
               const item = document.createElement("div");
               item.className = "leaderboard-item";
-              item.innerHTML = `<span>${index + 1}. ${entry.name}</span><span>${
-                entry.score
-              }</span>`;
+              item.innerHTML = `<span>${index + 1}. ${entry.name}</span><span>${entry.score}</span>`;
               leaderboardElement.appendChild(item);
             });
           });
@@ -507,26 +502,24 @@
           return;
         }
 
-        // Show loading state
         saveButton.disabled = true;
         saveLoader.classList.remove("hidden");
 
-        // Check if this player has a higher score than their previous submission
+        // Check for existing entry by user ID
         leaderboardRef
-          .orderByChild("name")
-          .equalTo(playerName)
+          .orderByChild("userId")
+          .equalTo(userId)
           .once("value", (snapshot) => {
             const data = snapshot.val() || {};
             const entries = Object.entries(data);
 
             if (entries.length > 0) {
-              // Player exists, check if new score is higher
               const [key, entry] = entries[0];
               if (poppedCount > entry.score) {
-                // Update the score
                 leaderboardRef
                   .child(key)
                   .update({
+                    name: playerName,
                     score: poppedCount,
                     timestamp: firebase.database.ServerValue.TIMESTAMP,
                   })
@@ -536,16 +529,14 @@
                     saveLoader.classList.add("hidden");
                   });
               } else {
-                alert(
-                  "Your current score isn't higher than your previous submission!"
-                );
+                alert("Your current score isn't higher than your previous submission!");
                 saveButton.disabled = false;
                 saveLoader.classList.add("hidden");
               }
             } else {
-              // New player, add to leaderboard
               leaderboardRef
                 .push({
+                  userId: userId,
                   name: playerName,
                   score: poppedCount,
                   timestamp: firebase.database.ServerValue.TIMESTAMP,
@@ -598,7 +589,6 @@
         bubbles.forEach((bubble) => bubble.remove());
         bubbles = [];
         createBubbles(15);
-        // Note: We don't reset poppedCount anymore since we want to persist it
       }
 
       function toggleAudio() {
@@ -625,7 +615,7 @@
       createBubbles(15);
 
       // Auto-add bubbles every 8 seconds
-      setInterval(() => createBubbles(8), 8000);
+      setInterval(() => createBubbles(8), 10000);
 
       // Make responsive
       window.addEventListener("resize", () => {
@@ -643,3 +633,4 @@
     </script>
   </body>
 </html>
+
